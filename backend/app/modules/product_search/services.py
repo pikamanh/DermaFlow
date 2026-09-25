@@ -1,9 +1,12 @@
 import asyncio
+import hashlib
 import time
 import json
 
 from...core.config import settings
 from...core.logging import setup_logger
+
+from ..cache import TTLCache
 
 from .providers.base import ProductSearchProvider
 from .providers.hasaki import HasakiProvider
@@ -29,6 +32,11 @@ class ProductSearchService:
             TGSFProvider(),
         ]
         self.fallback_provider = GoogleFallbackProvider()
+        self.cache = TTLCache(default_ttl=settings.CACHE_TTL_SECONDS)
+
+    def _cache_key(self, search_query: SearchQuery) -> str:
+        normalized = search_query.query.strip().lower()
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
     async def _search_with_latency(
         self,
@@ -45,6 +53,15 @@ class ProductSearchService:
             logger.info(f"Provider {name} took {elapsed_ms:.0f}ms")
 
     async def search(self, search_query: SearchQuery) -> SearchResult:
+        cache_key = self._cache_key(search_query)
+        cached_result = self.cache.get(cache_key)
+
+        if cached_result is not None:
+            logger.info(f"Cache HIT for query='{search_query.query}'")
+            return cached_result
+
+        logger.info(f"Cache MISS for query='{search_query.query}'")
+
         start = time.perf_counter()
 
         #Get raw result
@@ -86,6 +103,8 @@ class ProductSearchService:
         #Fallback nếu kết quả sau dedupe/rank vẫn quá ít
         if len(result_final.products or []) < settings.FALLBACK_MIN_RESULTS:
             result_final = await self._fallback_search(search_query, result_final)
+
+        self.cache.set(cache_key, result_final)
 
         return result_final
 
