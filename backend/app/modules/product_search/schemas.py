@@ -2,10 +2,17 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+class ProductSource(BaseModel):
+    source: str
+    price: int
+    marketPrice: int
+    urlProduct: str
+
 class Product(BaseModel):
     name: str
     englishName: Optional[str] = None
     brandName: Optional[str] = None
+    volume: Optional[str] = None
     marketPrice: int
     price: int
     discountPercent: Optional[float] = None
@@ -21,6 +28,7 @@ class Product(BaseModel):
     categoryID: Optional[int] = None
     urlProduct: str
     source: str
+    otherSource: Optional[list[ProductSource]] = None
 
 class SearchQuery(BaseModel):
     query: str
