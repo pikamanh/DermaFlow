@@ -19,5 +19,8 @@ normalize:
 fallback:
 	$(PY) backend.tests.product_search.test_google_fallback
 
+cache:
+	$(PY) backend.tests.product_search.test_cache_manual
+
 run backend:
 	uvicorn backend.app.main:app --reload --port $(PORT_BACKEND)
