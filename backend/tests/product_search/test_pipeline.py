@@ -21,9 +21,14 @@ def raw_result() -> SearchResult:
 def test_pipeline_runs_end_to_end_without_error(raw_result):
     normalize(raw_result)
     deduplicate(raw_result)
+
+    # top_product lấy top_k riêng cho từng source, nên tổng tối đa là
+    # top_k * số source khác nhau còn lại sau dedupe.
+    max_total = 5 * len({p.source for p in raw_result.products})
+
     top_product(raw_result, top_k=5)
 
-    assert 0 < len(raw_result.products) <= 5
+    assert 0 < len(raw_result.products) <= max_total
 
 
 def test_pipeline_output_has_no_duplicate_urls(raw_result):

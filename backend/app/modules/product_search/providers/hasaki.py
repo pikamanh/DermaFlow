@@ -1,4 +1,9 @@
+import json
+import re
+
 import httpx
+from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
 
 from backend.app.core.logging import setup_logger
 from backend.app.modules.product_search.providers.base import (
@@ -6,6 +11,7 @@ from backend.app.modules.product_search.providers.base import (
 )
 from backend.app.modules.product_search.schemas import (
     parse_product,
+    ProductDetail,
     SearchQuery,
     SearchResult,
 )
@@ -91,6 +97,73 @@ class HasakiProvider(ProductSearchProvider):
             products=products,
         )
 
+    async def get_detail(self, url: str) -> ProductDetail | None:
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        try:
+            async with async_playwright() as playwright:
+                browser = await playwright.chromium.launch()
+
+                try:
+                    page = await browser.new_page(user_agent=headers["User-Agent"])
+                    await page.goto(url, wait_until="networkidle", timeout=30000)
+                    html = await page.content()
+                finally:
+                    await browser.close()
+        except Exception as e:
+            logger.error(f"Failed to render Hasaki detail for {url}: {e}")
+            return None
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        ld_json = None
+        for script in soup.find_all("script", type="application/ld+json"):
+            try:
+                data = json.loads(script.get_text())
+            except json.JSONDecodeError:
+                continue
+
+            if data.get("@type") == "Product":
+                ld_json = data
+                break
+
+        if not ld_json:
+            logger.warning(f"Cannot get detail from Hasaki for {url}.")
+            return None
+
+        def section_text(element_id: str) -> str | None:
+            node = soup.find(id=element_id)
+            return node.get_text(" ", strip=True) if node else None
+
+        description = section_text("DescriptionInfo")
+        usage = section_text("GuideInfo")
+
+        ingredients = None
+        ingredient_text = section_text("IngredientInfo")
+
+        if ingredient_text:
+            detail_match = re.search(
+                r"Thành phần chi tiết\s*:\s*(.+)", ingredient_text
+            )
+            chunk = detail_match.group(1) if detail_match else ingredient_text
+            ingredients = [
+                item.strip() for item in chunk.split(",") if item.strip()
+            ] or None
+
+        offer = ld_json.get("offers") or {}
+
+        return ProductDetail(
+            name=ld_json.get("name"),
+            brandName=(ld_json.get("brand") or {}).get("name"),
+            price=int(offer.get("price") or 0),
+            ingredients=ingredients,
+            description=description,
+            usage=usage,
+            urlProduct=url,
+            source="hasaki",
+        )
+
+
 async def main():
     hasaki = HasakiProvider()
 
@@ -99,6 +172,9 @@ async def main():
     )
 
     print(result.products[0])
+
+    detail = await hasaki.get_detail(result.products[0].urlProduct)
+    print(detail)
 
 
 if __name__ == "__main__":

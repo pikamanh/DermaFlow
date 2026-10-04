@@ -8,8 +8,12 @@ from backend.app.core.logging import setup_logger
 from backend.app.modules.product_search.providers.base import (
     ProductSearchProvider,
 )
+from backend.app.modules.product_search.processors.detail_parser import (
+    split_description_sections,
+)
 from backend.app.modules.product_search.schemas import (
     Product,
+    ProductDetail,
     SearchQuery,
     SearchResult,
 )
@@ -172,6 +176,46 @@ class LamThaoProvider(ProductSearchProvider):
             products=products,
         )
 
+    async def get_detail(self, url: str) -> ProductDetail | None:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        json_url = url.rstrip("/") + ".json"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(json_url, headers=headers)
+                response.raise_for_status()
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to get LamThao detail for {url}: {e}")
+            return None
+
+        product = response.json().get("product")
+
+        if not product:
+            logger.warning(f"Cannot get detail from LamThao for {url}.")
+            return None
+
+        variant = (product.get("variants") or [{}])[0]
+        price = _parse_price(str(variant.get("price") or 0))
+        market_price = _parse_price(str(variant.get("compare_at_price") or ""))
+
+        body_text = BeautifulSoup(
+            product.get("body_html") or "", "html.parser"
+        ).get_text("\n")
+
+        description, ingredients, usage = split_description_sections(body_text)
+
+        return ProductDetail(
+            name=product["title"],
+            brandName=product.get("vendor"),
+            marketPrice=market_price or price,
+            price=price,
+            ingredients=ingredients,
+            description=description or None,
+            usage=usage,
+            urlProduct=url,
+            source="lamthao",
+        )
+
 
 async def main():
     lamthao = LamThaoProvider()
@@ -182,6 +226,9 @@ async def main():
 
     print(result.products[0] if result.products else "No products found")
     print(f"Total: {len(result.products or [])}")
+
+    detail = await lamthao.get_detail(result.products[0].urlProduct)
+    print(detail)
 
 
 if __name__ == "__main__":

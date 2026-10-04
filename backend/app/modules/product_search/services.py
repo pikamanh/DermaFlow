@@ -19,20 +19,32 @@ from .processors.normalizer import normalize
 from .processors.deduplicator import deduplicate
 from .processors.ranker import top_product
 
-from .schemas import SearchQuery, SearchResult
+from .schemas import ProductDetail, SearchQuery, SearchResult
 
 logger = setup_logger(__name__)
 
 
 class ProductSearchService:
+    PROVIDER_DOMAINS = {
+        "hasaki.vn": "hasaki",
+        "lamthaocosmetics.vn": "lamthao",
+        "thegioiskinfood.com": "tgsf",
+    }
+
     def __init__(self):
         self.providers = [
             HasakiProvider(),
             LamThaoProvider(),
             TGSFProvider(),
         ]
+        self.providers_by_source = {
+            "hasaki": self.providers[0],
+            "lamthao": self.providers[1],
+            "tgsf": self.providers[2],
+        }
         self.fallback_provider = GoogleFallbackProvider()
         self.cache = TTLCache(default_ttl=settings.CACHE_TTL_SECONDS)
+        self.detail_cache = TTLCache(default_ttl=settings.CACHE_TTL_SECONDS)
 
     def _cache_key(self, search_query: SearchQuery) -> str:
         normalized = search_query.query.strip().lower()
@@ -107,6 +119,35 @@ class ProductSearchService:
         self.cache.set(cache_key, result_final)
 
         return result_final
+
+    async def get_detail(self, url: str) -> ProductDetail | None:
+        source = next(
+            (
+                source
+                for domain, source in self.PROVIDER_DOMAINS.items()
+                if domain in url
+            ),
+            None,
+        )
+
+        if source is None:
+            logger.error(f"No provider found for url='{url}'")
+            return None
+
+        cache_key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        cached_detail = self.detail_cache.get(cache_key)
+
+        if cached_detail is not None:
+            logger.info(f"Detail cache HIT for url='{url}'")
+            return cached_detail
+
+        provider = self.providers_by_source[source]
+        detail = await provider.get_detail(url)
+
+        if detail is not None:
+            self.detail_cache.set(cache_key, detail)
+
+        return detail
 
     async def _fallback_search(
         self,

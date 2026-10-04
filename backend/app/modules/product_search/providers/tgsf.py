@@ -2,13 +2,18 @@ import asyncio
 import math
 
 import httpx
+from bs4 import BeautifulSoup
 
 from backend.app.core.logging import setup_logger
+from backend.app.modules.product_search.processors.detail_parser import (
+    split_description_sections,
+)
 from backend.app.modules.product_search.providers.base import (
     ProductSearchProvider,
 )
 from backend.app.modules.product_search.schemas import (
     Product,
+    ProductDetail,
     SearchQuery,
     SearchResult,
 )
@@ -69,7 +74,7 @@ class TGSFProvider(ProductSearchProvider):
 
                 first_response.raise_for_status()
                 response_json = first_response.json()
-                store_url = response_json.get("store", "")
+                store_url = "https://thegioiskinfood.com"
 
                 list_in_stock = extract_in_stock(response_json, store_url)
 
@@ -123,6 +128,46 @@ class TGSFProvider(ProductSearchProvider):
             products=list_in_stock,
         )
 
+    async def get_detail(self, url: str) -> ProductDetail | None:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        json_url = url.rstrip("/") + ".json"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(json_url, headers=headers)
+                response.raise_for_status()
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to get TGSF detail for {url}: {e}")
+            return None
+
+        product = response.json().get("product")
+
+        if not product:
+            logger.warning(f"Cannot get detail from TGSF for {url}.")
+            return None
+
+        variant = (product.get("variants") or [{}])[0]
+        price = int(variant.get("price") or 0)
+        market_price = int(variant.get("compare_at_price") or 0)
+
+        body_text = BeautifulSoup(
+            product.get("body_html") or "", "html.parser"
+        ).get_text("\n")
+
+        description, ingredients, usage = split_description_sections(body_text)
+
+        return ProductDetail(
+            name=product["title"],
+            brandName=product.get("vendor"),
+            marketPrice=market_price or price,
+            price=price,
+            ingredients=ingredients,
+            description=description or None,
+            usage=usage,
+            urlProduct=url,
+            source="tgsf",
+        )
+
 
 async def main():
     tgsf = TGSFProvider()
@@ -133,6 +178,9 @@ async def main():
 
     print(result.products[0] if result.products else "No products found")
     print(f"Total: {len(result.products or [])}")
+
+    detail = await tgsf.get_detail(result.products[0].urlProduct)
+    print(detail)
 
 
 if __name__ == "__main__":

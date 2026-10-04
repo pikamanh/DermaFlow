@@ -27,7 +27,6 @@ def _seperate_volume(value: str | None) -> str | None:
 
 def _normalize_product(product: Product) -> None:
     product.name = _clean_text(product.name) or product.name
-    product.englishName = _clean_text(product.englishName)
     product.brandName = _clean_text(product.brandName)
     product.categoryName = _clean_text(product.categoryName)
 

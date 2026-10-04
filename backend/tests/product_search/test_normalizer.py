@@ -5,7 +5,6 @@ from backend.app.modules.product_search.schemas import Product, SearchResult
 def _make_product(**overrides) -> Product:
     defaults = dict(
         name="  Kem   Chống  Nắng ABC 50ml ",
-        englishName=None,
         brandName=None,
         volume=None,
         marketPrice=100000,
@@ -26,22 +25,22 @@ def test_collapses_internal_and_trailing_whitespace():
 
 
 def test_none_optional_text_fields_stay_none():
-    product = _make_product(englishName=None, brandName=None, categoryName=None)
+    product = _make_product(brandName=None, categoryName=None)
     result = SearchResult(query="q", products=[product])
 
     normalize(result)
 
-    assert result.products[0].englishName is None
     assert result.products[0].brandName is None
+    assert result.products[0].categoryName is None
 
 
 def test_blank_optional_text_becomes_none():
-    product = _make_product(englishName="   ")
+    product = _make_product(brandName="   ")
     result = SearchResult(query="q", products=[product])
 
     normalize(result)
 
-    assert result.products[0].englishName is None
+    assert result.products[0].brandName is None
 
 
 def test_negative_prices_are_clamped_to_zero():
