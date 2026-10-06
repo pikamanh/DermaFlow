@@ -1,63 +1,63 @@
 # DermaFlow
 
-> Trợ lý làm đẹp thông minh: tìm kiếm mỹ phẩm theo thời gian thực từ nhiều website, chatbot tư vấn có tool calling, phân tích da qua ảnh khuôn mặt và gợi ý sản phẩm cá nhân hóa.
+> A smart beauty assistant: real-time cosmetics search across multiple websites, a tool-calling beauty chatbot, facial skin analysis, and personalized product recommendations.
 
-DermaFlow là backend **FastAPI** được xây theo kiến trúc **Modular Monolith**: mỗi chức năng (product search, chat, vision, recommendation) là một module độc lập trong `backend/app/modules/`, tầng `api/` chỉ nhận/trả HTTP và gọi service.
+DermaFlow is a **FastAPI** backend built as a **Modular Monolith**. Each capability (product search, chat, vision, recommendation) is an independent module under `backend/app/modules/`. The `api/` layer only handles HTTP and delegates to services.
 
 ---
 
-## Mục lục
+## Table of Contents
 
 - [Features](#features)
-- [Kiến trúc & Flow hoạt động](#kiến-trúc--flow-hoạt-động)
-- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-- [Cài đặt & Chạy](#cài-đặt--chạy)
+- [Architecture & Flow](#architecture--flow)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
 - [API](#api)
-- [Tiến trình phát triển](#tiến-trình-phát-triển)
+- [Progress](#progress)
 
 ---
 
 ## Features
 
-### ✅ Đã hoàn thành
+### ✅ Completed
 
-- **Real-time Product Search** từ 3 website mỹ phẩm Việt Nam:
+- **Real-time Product Search** across 3 Vietnamese cosmetics retailers:
   - [Hasaki](https://hasaki.vn)
-  - [Lâm Thảo Cosmetics](https://lamthaocosmetics.vn)
-  - [Thế Giới Skinfood](https://thegioiskinfood.com)
-- **Tìm kiếm song song** (`asyncio.gather`) — một provider lỗi không làm hỏng toàn bộ request; có log latency từng provider.
-- **Xử lý kết quả**:
-  - *Normalize* — chuẩn hóa tên, giá, dung tích.
-  - *Deduplicate* — gộp sản phẩm trùng theo `name + brand + volume`, giữ nơi bán rẻ nhất và liệt kê các nguồn khác trong `otherSource` (tiện so sánh giá).
-  - *Rank* — xếp hạng theo độ liên quan với query, đảm bảo mỗi nguồn đều có đại diện trong top-K.
-- **Cache in-memory có TTL** cho cả kết quả search và product detail — query lặp lại trả về ngay lập tức.
-- **Product Detail** — lấy thành phần (ingredients), mô tả, hướng dẫn sử dụng từ URL sản phẩm; tự định tuyến tới đúng provider theo domain.
+  - [Lam Thao Cosmetics](https://lamthaocosmetics.vn)
+  - [The Gioi Skinfood](https://thegioiskinfood.com)
+- **Parallel search** (`asyncio.gather`): one failing provider doesn't break the whole request, and each provider's latency is logged.
+- **Result processing**:
+  - *Normalize*: standardizes names, prices and volumes.
+  - *Deduplicate*: merges duplicate products by `name + brand + volume`. It keeps the cheapest offer and lists the other retailers in `otherSource`, so prices can be compared.
+  - *Rank*: orders results by query relevance and makes sure every source is represented in the top-K.
+- **In-memory TTL cache** for both search results and product details, so repeated queries return instantly.
+- **Product Detail**: fetches ingredients, description and usage instructions from a product URL. The request is routed to the right provider based on the URL's domain.
 
-### 🚧 Đang phát triển
+### 🚧 In Progress
 
-- **Beauty Chatbot** dùng LLM qua API tương thích OpenAI.
-- **Google Fallback** khi kết quả từ 3 nguồn quá ít (đã có khung code, chưa sử dụng được).
+- **Beauty Chatbot** backed by an LLM through an OpenAI-compatible API.
+- **Google Fallback** for when the 3 sources return too few results. The code skeleton exists but it is not working yet.
 
-### 🗓️ Kế hoạch
+### 🗓️ Planned
 
-- **Tool Calling** — chatbot tự gọi `search_products` / `get_product_detail`.
-- **RAG** — trả lời kiến thức làm đẹp chung từ knowledge base.
-- **Facial / Skin Analysis** — kiểm tra chất lượng ảnh, phát hiện khuôn mặt, chia vùng (trán, má, mũi, cằm), phân tích đặc điểm da (mụn, dầu, sắc tố).
-- **Skin Profile** — chuẩn hóa kết quả vision thành hồ sơ da (không phải chẩn đoán y khoa).
-- **Personalized Recommendation** — gợi ý sản phẩm/routine theo hồ sơ da, ngân sách và nhu cầu, kèm lý do.
+- **Tool Calling**: the chatbot calls `search_products` / `get_product_detail` on its own.
+- **RAG**: answers general beauty questions from a knowledge base.
+- **Facial / Skin Analysis**: image quality checks, face detection, facial regions (forehead, cheeks, nose, chin), and skin feature analysis (acne, oiliness, pigmentation).
+- **Skin Profile**: turns vision output into a standardized skin profile. This is not a medical diagnosis.
+- **Personalized Recommendation**: suggests products and routines based on skin profile, budget and needs, and explains each suggestion.
 
 ---
 
-## Kiến trúc & Flow hoạt động
+## Architecture & Flow
 
-### Nguyên tắc
+### Principles
 
-- `api/` chỉ xử lý HTTP; business logic nằm trong `modules/`.
-- Mỗi website là một `provider` riêng, cùng implement interface `ProductSearchProvider` và trả về chung schema `Product`.
-- Chatbot gọi tool → tool gọi service; **LLM không tự crawl website**.
-- Vision độc lập với chatbot, giao tiếp qua `SkinProfile`.
+- `api/` only handles HTTP; business logic lives in `modules/`.
+- Each website is its own `provider`. Every provider implements the `ProductSearchProvider` interface and returns the shared `Product` schema.
+- The chatbot calls tools and tools call services. **The LLM never crawls websites directly.**
+- Vision is independent of the chatbot; they communicate through `SkinProfile`.
 
-### Flow Product Search (hiện tại)
+### Product Search Flow (current)
 
 ```text
 GET /products/search?query=...
@@ -65,12 +65,12 @@ GET /products/search?query=...
             ▼
    ProductSearchService
             │
-     ┌── Cache HIT? ──── Yes ──► Trả kết quả
+     ┌── Cache HIT? ──── Yes ──► Return result
      │       │
      │       No
      │       ▼
      │  ┌──────────┬──────────────┬──────────────────┐
-     │  ▼          ▼              ▼                  │  (song song)
+     │  ▼          ▼              ▼                  │  (parallel)
      │ Hasaki   LamThao   TheGioiSkinfood            │
      │  └──────────┴──────┬───────┘                  │
      │                    ▼
@@ -78,84 +78,84 @@ GET /products/search?query=...
      │                    ▼
      │   Normalize → Deduplicate → Rank (Top K)
      │                    ▼
-     │        Đủ kết quả? ── No ──► Google Fallback (WIP)
+     │        Enough results? ── No ──► Google Fallback (WIP)
      │                    │
      │                   Yes
      │                    ▼
-     └────────────── Lưu cache ──► SearchResult
+     └────────────── Store in cache ──► SearchResult
 ```
 
-### Flow Product Detail
+### Product Detail Flow
 
 ```text
 GET /products/detail?url=...
         │
         ▼
-Xác định provider theo domain (hasaki.vn / lamthaocosmetics.vn / thegioiskinfood.com)
+Resolve provider by domain (hasaki.vn / lamthaocosmetics.vn / thegioiskinfood.com)
         │
         ▼
-Detail cache HIT? ── Yes ──► Trả kết quả
+Detail cache HIT? ── Yes ──► Return result
         │ No
         ▼
 Provider.get_detail(url) → ProductDetail (ingredients, description, usage, ...)
 ```
 
-### Flow MVP mục tiêu
+### Target MVP Flow
 
 ```text
-Upload ảnh khuôn mặt
+Upload face photo
         ▼
 Vision: Validation → Face Detection → Regions → Skin Features
         ▼
 SkinProfile
         ▼
-User: "Routine dưới 1 triệu cho da dầu mụn"
+User: "A routine under 1 million VND for oily, acne-prone skin"
         ▼
 Chatbot ──► Recommendation Rules ──► Product Search ──► Ranking
         ▼
-Câu trả lời: routine + sản phẩm + giá + nguồn + lý do
+Response: routine + products + prices + sources + reasons
 ```
 
 ---
 
-## Cấu trúc thư mục
+## Project Structure
 
 ```text
 DermaFlow/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                    # Entry point FastAPI
+│   │   ├── main.py                    # FastAPI entry point
 │   │   ├── api/
-│   │   │   ├── router.py              # Router gốc + /health
+│   │   │   ├── router.py              # Root router + /health
 │   │   │   └── v1/products.py         # /products/search, /products/detail
 │   │   ├── core/
-│   │   │   ├── config.py              # Đọc biến môi trường
+│   │   │   ├── config.py              # Environment settings
 │   │   │   └── logging.py
 │   │   └── modules/
-│   │       ├── cache.py               # TTLCache in-memory
+│   │       ├── cache.py               # In-memory TTLCache
 │   │       ├── chat/                  # Chatbot (WIP)
 │   │       └── product_search/
 │   │           ├── schemas.py         # Product, ProductDetail, SearchQuery, SearchResult
-│   │           ├── services.py        # ProductSearchService (điều phối)
+│   │           ├── services.py        # ProductSearchService (orchestration)
 │   │           ├── providers/         # base, hasaki, lamthao, tgsf
 │   │           ├── processors/        # normalizer, deduplicator, ranker, detail_parser
 │   │           └── fallback/google.py
 │   └── tests/
-├── plan.md                            # Roadmap chi tiết theo phase
+├── plan.md                            # Detailed phase-by-phase roadmap
 ├── Makefile
 └── pyproject.toml
 ```
 
 ---
 
-## Cài đặt & Chạy
+## Getting Started
 
-### Yêu cầu
+### Requirements
 
 - Python ≥ 3.10
 - [uv](https://docs.astral.sh/uv/)
 
-### Cài đặt
+### Installation
 
 ```bash
 git clone <repo-url> DermaFlow
@@ -163,59 +163,59 @@ cd DermaFlow
 uv sync
 ```
 
-### Biến môi trường
+### Environment Variables
 
-Tạo file `.env` ở thư mục gốc:
+Create a `.env` file in the project root:
 
 ```env
 # Product search
 FALLBACK_MIN_RESULTS=3
 CACHE_TTL_SECONDS=300
 
-# Google fallback (chưa bắt buộc)
+# Google fallback (optional for now)
 GOOGLE_API_KEY=
 GOOGLE_CSE_ID=
 
-# Chatbot – API tương thích OpenAI
+# Chatbot – OpenAI-compatible API
 BASE_URL=
 API_KEY=
 MODEL=
 ```
 
-### Chạy backend
+### Run the Backend
 
 ```bash
-make run-backend          # uvicorn tại http://localhost:8001
+make run-backend          # uvicorn at http://localhost:8001
 ```
 
 - Swagger UI: http://localhost:8001/docs
 - Health check: http://localhost:8001/health
 
-### Test
+### Testing
 
 ```bash
-uv run pytest             # Chạy toàn bộ test trong backend/tests
+uv run pytest             # Run all tests in backend/tests
 
-# Chạy thử từng thành phần
-make hasaki               # Provider Hasaki
-make lamthao              # Provider Lâm Thảo
-make tgsf                 # Provider Thế Giới Skinfood
-make services             # Pipeline search đầy đủ
-make cache                # Kiểm tra cache HIT/MISS
+# Try individual components
+make hasaki               # Hasaki provider
+make lamthao              # Lam Thao provider
+make tgsf                 # The Gioi Skinfood provider
+make services             # Full search pipeline
+make cache                # Cache HIT/MISS check
 ```
 
 ---
 
 ## API
 
-| Method | Endpoint | Mô tả |
+| Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/health` | Kiểm tra trạng thái server |
-| `GET` | `/products/search?query=<từ khóa>` | Tìm sản phẩm từ 3 nguồn, đã normalize/dedupe/rank |
-| `GET` | `/products/detail?url=<url sản phẩm>` | Lấy chi tiết sản phẩm (ingredients, description, usage) |
-| `GET` | `/products/chat?query=<câu hỏi>` | Chatbot cơ bản *(đang phát triển)* |
+| `GET` | `/health` | Server health check |
+| `GET` | `/products/search?query=<keyword>` | Search products across 3 sources (normalized, deduplicated and ranked) |
+| `GET` | `/products/detail?url=<product url>` | Get product details (ingredients, description, usage) |
+| `GET` | `/products/chat?query=<question>` | Basic chatbot *(in progress)* |
 
-Ví dụ response `/products/search?query=kem chống nắng`:
+Example response for `/products/search?query=kem chống nắng` (sunscreen):
 
 ```json
 {
@@ -240,37 +240,37 @@ Ví dụ response `/products/search?query=kem chống nắng`:
 
 ---
 
-## Tiến trình phát triển
+## Progress
 
-Chi tiết checklist từng phase xem tại [`plan.md`](plan.md).
+See [`plan.md`](plan.md) for the detailed checklist of each phase.
 
-| Phase | Nội dung | Trạng thái |
+| Phase | Scope | Status |
 |---|---|---|
-| 0 | Setup Foundation (FastAPI, `/health`, config, logging) | ✅ Hoàn thành |
-| 1 | Product Schema + Provider Interface | ✅ Hoàn thành |
-| 2 | Provider Hasaki | ✅ Hoàn thành |
-| 3 | Product Search Service + API | ✅ Hoàn thành |
-| 4 | Provider Lâm Thảo + Thế Giới Skinfood + Parallel Search | ✅ Hoàn thành |
-| 5 | Normalize + Deduplicate + Rank | ✅ Hoàn thành |
-| 6 | Cache + Google Fallback | 🟡 Cache xong, Google fallback chưa dùng được |
-| 7 | Product Detail | ✅ Hoàn thành |
-| 8 | Basic Chatbot | 🚧 Đang thực hiện |
-| 9 | Tool Calling | ⏳ Chưa bắt đầu |
-| 10 | Beauty Knowledge + RAG | ⏳ Chưa bắt đầu |
-| 11 | Vision Foundation | ⏳ Chưa bắt đầu |
-| 12 | Facial Regions | ⏳ Chưa bắt đầu |
-| 13 | Skin Feature Analysis | ⏳ Chưa bắt đầu |
-| 14 | Skin Profile | ⏳ Chưa bắt đầu |
-| 15 | Rule-Based Recommendation | ⏳ Chưa bắt đầu |
-| 16 | Integration: Face + Chatbot + Recommendation (MVP) | ⏳ Chưa bắt đầu |
-| 17 | Evaluation | ⏳ Chưa bắt đầu |
-| 18 | Deployment | ⏳ Chưa bắt đầu |
+| 0 | Setup Foundation (FastAPI, `/health`, config, logging) | ✅ Done |
+| 1 | Product Schema + Provider Interface | ✅ Done |
+| 2 | Hasaki Provider | ✅ Done |
+| 3 | Product Search Service + API | ✅ Done |
+| 4 | Lam Thao + The Gioi Skinfood Providers + Parallel Search | ✅ Done |
+| 5 | Normalize + Deduplicate + Rank | ✅ Done |
+| 6 | Cache + Google Fallback | 🟡 Cache done, Google fallback not working yet |
+| 7 | Product Detail | ✅ Done |
+| 8 | Basic Chatbot | 🚧 In progress |
+| 9 | Tool Calling | ⏳ Not started |
+| 10 | Beauty Knowledge + RAG | ⏳ Not started |
+| 11 | Vision Foundation | ⏳ Not started |
+| 12 | Facial Regions | ⏳ Not started |
+| 13 | Skin Feature Analysis | ⏳ Not started |
+| 14 | Skin Profile | ⏳ Not started |
+| 15 | Rule-Based Recommendation | ⏳ Not started |
+| 16 | Integration: Face + Chatbot + Recommendation (MVP) | ⏳ Not started |
+| 17 | Evaluation | ⏳ Not started |
+| 18 | Deployment | ⏳ Not started |
 
-**Milestone hiện tại:** M4 (Search 3 nguồn + Normalize + Rank + Cache) ✅ → đang hướng tới **M5 – Basic Chatbot**.
+**Current milestone:** M4 (3-source search + Normalize + Rank + Cache) ✅ → working towards **M5 – Basic Chatbot**.
 
 ---
 
-## Lưu ý
+## Disclaimer
 
-- DermaFlow **không** đưa ra chẩn đoán y khoa. Kết quả phân tích da (khi hoàn thành) chỉ mang tính tham khảo về đặc điểm nhìn thấy được.
-- Dữ liệu sản phẩm được lấy từ các website công khai; giá và tình trạng hàng có thể thay đổi theo thời gian.
+- DermaFlow does **not** provide medical diagnoses. Skin analysis results, once available, describe visible features only and are for reference.
+- Product data is collected from public websites. Prices and availability may change over time.
