@@ -1,26 +1,30 @@
-PY := uv run python -m
+UV := uv run
+PY := python -m
 PORT_BACKEND := 8001
 
 hasaki:
-	$(PY) backend.app.modules.product_search.providers.hasaki
+	$(UV) $(PY) backend.app.modules.product_search.providers.hasaki
 
 lamthao:
-	$(PY) backend.app.modules.product_search.providers.lamthao
+	$(UV) $(PY) backend.app.modules.product_search.providers.lamthao
 
 tgsf:
-	$(PY) backend.app.modules.product_search.providers.tgsf
+	$(UV) $(PY) backend.app.modules.product_search.providers.tgsf
 
 services:
-	$(PY) backend.app.modules.product_search.services
+	$(UV) $(PY) backend.app.modules.product_search.services
 
 normalize:
-	$(PY) backend.app.modules.product_search.processors.normalizer
+	$(UV) $(PY) backend.app.modules.product_search.processors.normalizer
 
 fallback:
-	$(PY) backend.tests.product_search.test_google_fallback
+	$(UV) $(PY) backend.tests.product_search.test_google_fallback
 
 cache:
-	$(PY) backend.tests.product_search.test_cache_manual
+	$(UV) $(PY) backend.tests.product_search.test_cache_manual
 
 run-backend:
 	uvicorn backend.app.main:app --reload --port $(PORT_BACKEND)
+
+pytest:
+	$(UV) pytest -s -v
