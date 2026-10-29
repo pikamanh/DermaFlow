@@ -24,7 +24,16 @@ cache:
 	$(UV) $(PY) backend.tests.product_search.test_cache_manual
 
 run-backend:
-	uvicorn backend.app.main:app --reload --port $(PORT_BACKEND)
+	$(UV) $(PY) uvicorn backend.app.main:app --reload --port $(PORT_BACKEND)
 
 pytest:
 	$(UV) pytest -s -v
+
+test-unit:
+	$(UV) pytest -v -m "not db and not llm"
+
+test-db:
+	$(UV) pytest -v -m db
+
+test-llm:
+	$(UV) pytest -s -v -m llm

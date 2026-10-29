@@ -10,10 +10,12 @@ dependencies = [
     "httpx>=0.28.1",
     "openai>=3.5.0",
     "playwright>=1.63.0",
+    "psycopg[binary]>=3.3.6",
     "pydantic>=2.13.4",
     "pytest>=9.1.1",
     "python-dotenv>=1.2.3",
     "requests>=2.34.2",
+    "sqlalchemy>=2.0.55",
     "uvicorn[standard]>=0.52.4",
 ]
 
@@ -26,3 +28,11 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["backend/tests"]
+markers = [
+    "db: integration test cần DATABASE_URI (Neon)",
+    "llm: gọi LLM thật, tốn API call",
+]
+
+[tool.setuptools.packages.find]
+include = ["backend"]
+exclude = ["frontend"]
